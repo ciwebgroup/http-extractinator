@@ -1,0 +1,16 @@
+{
+  "tasks": {
+    "copy": "deno run --allow-net --allow-read --allow-write main.ts copy",
+    "zip": "deno run --allow-read --allow-write main.ts zip",
+    "serve": "deno run --allow-read --allow-net main.ts serve",
+    "help": "deno run main.ts help"
+  },
+  "permissions": {
+    "net": true,
+    "read": true,
+    "write": true
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.unstable", "dom"]
+  }
+}
