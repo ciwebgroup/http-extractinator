@@ -1,7 +1,7 @@
 import { parse } from "https://deno.land/std@0.181.0/flags/mod.ts";
-import { ensureDir, exists } from "https://deno.land/std@0.181.0/fs/mod.ts";
+import { ensureDir } from "https://deno.land/std@0.181.0/fs/mod.ts";
 import * as path from "https://deno.land/std@0.181.0/path/mod.ts";
-import { DOMParser } from "https://deno.land/x/deno_dom/deno-dom-wasm.ts";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.48/deno-dom-wasm.ts";
 
 // Parse arguments
 const args = parse(Deno.args, {
@@ -19,24 +19,13 @@ if (!startUrl) {
   Deno.exit(1);
 }
 
-const allDomains = args._;
+const allDomains: string[] = args._ as string[];
 
 allDomains.shift();
-
-// TODO: Validate these are all actual domains if not throw an error
-
-// allDomains.forEach((domain) => {
-//   if (!domain.startsWith("http")) {
-//     throw new Error("All domains must start with http or https");
-//   }
-// });
 
 const domain = new URL(startUrl).hostname;
 const outputDir = `./${domain}`;
 const visitedPages = new Set<string>();
-const aliases = Array.isArray(args.alias)
-  ? args.alias
-  : [args.alias].filter(Boolean); // Support multiple aliases
 
 await ensureDir(outputDir);
 await ensureDir(path.join(outputDir, "scripts"));
@@ -49,7 +38,7 @@ function getAssetType(url: URL): "scripts" | "styles" | "images" | null {
   if (extension) {
     if (["js"].includes(extension)) return "scripts";
     if (["css"].includes(extension)) return "styles";
-    if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension))
+    if (["avif", "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension))
       return "images";
   }
   return null;
@@ -121,7 +110,7 @@ async function processPage(pageUrl: URL) {
    
     // Replace image paths with relative URI paths
     html = html.replace(
-      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
+      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
       "/images/$1"
     );
 
@@ -143,9 +132,6 @@ async function processPage(pageUrl: URL) {
       "/assets/$1"
     );
 
-
-    console.log("domain", domain);
-
   });  
   // Determine save path, handling trailing slashes and no file extension
   let savePath: string;
@@ -163,7 +149,7 @@ async function processPage(pageUrl: URL) {
 }
 
 // Discover links and assets within HTML content
-async function discoverLinksAndAssets(html: string, baseUrl: URL) {
+function discoverLinksAndAssets(html: string, baseUrl: URL) {
   const document = new DOMParser().parseFromString(html, "text/html");
   if (!document) return;
 
@@ -184,7 +170,7 @@ async function discoverLinksAndAssets(html: string, baseUrl: URL) {
   allDomains.forEach((domain) => {
     
     const currentUrl = new URL(domain).hostname;
-    const allStaticAssetsRegExp = new RegExp(`https?:\\/\\/(?:www\\.)?${currentUrl}\\/[^\"' ]+\\.(css|js|png|jpg|jpeg|gif|webp|svg|bmp|ico|woff2?|ttf|otf|eot)(?=['\"\\s>])`, "gi");        
+    const allStaticAssetsRegExp = new RegExp(`https?:\\/\\/(?:www\\.)?${currentUrl}\\/[^\"' ]+\\.(css|js|png|avif|jpg|jpeg|gif|webp|svg|bmp|ico|woff2?|ttf|otf|eot)(?=['\"\\s>])`, "gi");        
     const allStaticAssets = html.match(allStaticAssetsRegExp) ?? [];
    
     allStaticAssets.forEach((url) => {
