@@ -10,17 +10,18 @@ const args = parse(Deno.args, {
   },
 });
 
-let directory = args._[1] as string || "./";
+const siteDirectory = "./sites/"
+const site = (args._[1] as string || "./").replace(/^https?:\/\//, "");
 const port = args.port;
 
 // Strip "http://" or "https://" from the start if present
-directory = directory.replace(/^https?:\/\//, "");
+// directory = directory.replace(/^https?:\/\//, "");
 
 // Check if the directory exists
-if (!(await exists(directory))) {
-  console.error(`\x1b[31mError:\x1b[0m Directory "${directory}" not found.`);
+if (!(await exists(`${siteDirectory}${site}`))) {
+  console.error(`\x1b[31mError:\x1b[0m Directory "${site}" not found.`);
   Deno.exit(1);
 }
 
-console.log(`Serving directory "${directory}" at http://localhost:${port}`);
-serve((req) => serveDir(req, { fsRoot: directory }), { port });
+console.log(`Serving directory "${site}" at http://localhost:${port}`);
+serve((req) => serveDir(req, { fsRoot: `${siteDirectory}${site}` }), { port });

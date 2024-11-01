@@ -24,15 +24,15 @@ const allDomains: string[] = args._ as string[];
 allDomains.shift();
 
 const domain = new URL(startUrl).hostname;
-const outputDir = `./${domain}`;
+const outputDir = `./sites/${domain}`;
 const visitedPages = new Set<string>();
 
 await ensureDir(outputDir);
-await ensureDir(path.join(outputDir, "scripts"));
-await ensureDir(path.join(outputDir, "styles"));
-await ensureDir(path.join(outputDir, "images"));
-await ensureDir(path.join(outputDir, "fonts"));
-await ensureDir(path.join(outputDir, "icons"));
+await ensureDir(path.join(outputDir, "assets/scripts"));
+await ensureDir(path.join(outputDir, "assets/styles"));
+await ensureDir(path.join(outputDir, "assets/images"));
+await ensureDir(path.join(outputDir, "assets/fonts"));
+await ensureDir(path.join(outputDir, "assets/icons"));
 
 // Function to categorize assets by type based on extension
 function getAssetType(url: URL): "scripts" | "styles" | "images" | "fonts" | "icons" | null {
@@ -54,22 +54,26 @@ function getAssetType(url: URL): "scripts" | "styles" | "images" | "fonts" | "ic
 async function downloadAsset(assetUrl: URL) {
 
   const assetType = getAssetType(assetUrl);
+
   if (!assetType) return;
 
   const response = await fetch(assetUrl.href, {
     headers: { "User-Agent": args["user-agent"] },
   });
 
-
-
   if (response.ok) {
+
     const data = new Uint8Array(await response.arrayBuffer());
+
     const savePath = path.join(
       outputDir,
+      'assets',
       assetType,
       path.basename(assetUrl.pathname)
     );
+
     await Deno.writeFile(savePath, data);
+
     console.log(`\x1b[32mDownloaded\x1b[0m: ${assetUrl.href} to ${savePath}`);
 
     if (assetType === "styles") {
@@ -111,6 +115,8 @@ async function processPage(pageUrl: URL) {
 
   let html = await response.text();
 
+  await discoverLinksAndAssets(html, pageUrl);
+
   // Replace alias domains with relative paths for local assets
   allDomains.forEach((url) => {  
 
@@ -118,39 +124,21 @@ async function processPage(pageUrl: URL) {
    
     // Replace image paths with relative URI paths
     html = html.replace(
-      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
+      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
       "/assets/images/$1"
-    );
-
-    // Replace script paths with relative URI paths
-    html = html.replace(
-      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(js))(?=['"\\s>])`, "g"),
+    ).replace(
+      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(js))(?=['"\\s>])`, "g"),
       "/assets/scripts/$1"
-    );
-
-    // Replace style paths with relative URI paths
-    html = html.replace(
-      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(css))(?=['"\\s>])`, "g"),
+    ).replace(
+      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"']+\\.(css))(?=['"\\s>])`, "g"),
       "/assets/styles/$1"
-    );
-
-    // Replace font paths with relative URI paths
-    html = html.replace(
-      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(woff|woff2|ttf|otf|eot))(?=['"\\s>])`, "g"),
+    ).replace(
+      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(woff|woff2|ttf|otf|eot))(?=['"\\s>])`, "g"),
       "/assets/fonts/$1"
-    );
-
-    // Replace icon paths with relative URI paths
-    html = html.replace(
-      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(ico))(?=['"\\s>])`, "g"),
+    ).replace(
+      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(ico))(?=['"\\s>])`, "g"),
       "/assets/icons/$1"
-    );
-
-    // Replace ... other link paths
-    html = html.replace(
-      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+)(?=['"\\s>])`, "g"),
-      "/assets/$1"
-    );
+    ).replace(/\r\n|\r/g, "\n");
 
   });
 
@@ -165,8 +153,6 @@ async function processPage(pageUrl: URL) {
   await ensureDir(path.dirname(savePath));
   await Deno.writeTextFile(savePath, html);
   console.log(`\x1b[32mSaved page\x1b[0m: ${pageUrl.href} to ${savePath}`);
-
-  await discoverLinksAndAssets(html, pageUrl);
 }
 
 // Discover links and assets within HTML content
@@ -188,20 +174,30 @@ function discoverLinksAndAssets(html: string, baseUrl: URL) {
     }
   });
 
-  allDomains.forEach((domain) => {
+  // console.log('html', html);
+  allDomains.forEach((url) => {
     
-    const currentUrl = new URL(domain).hostname;
-    const allStaticAssetsRegExp = new RegExp(`https?:\\/\\/(?:www\\.)?${currentUrl}\\/[^\"' ]+\\.(css|js|png|avif|jpg|jpeg|gif|webp|svg|bmp|ico|woff2?|ttf|otf|eot)(?=['\"\\s>])`, "gi");        
+    const domain = new URL(url).hostname;
+
+    const allStaticAssetsRegExpString = `https?:\\/\\/(?:www\\.)?${domain}\\/[^\"' ]+\\.(css|png|avif|jpg|jpeg|gif|webp|svg|bmp|js|ico|woff2?|ttf|otf|eot)(?=['\"\\s>])`;
+
+    // console.log('allStaticAssetsRegExpString', allStaticAssetsRegExpString);
+
+    const allStaticAssetsRegExp = new RegExp(allStaticAssetsRegExpString, "gi");        
     const allStaticAssets = html.match(allStaticAssetsRegExp) ?? [];
+
+    // console.log('allStaticAssets', allStaticAssets);
    
-    allStaticAssets.forEach((url) => {
-      const assetUrl = new URL(url);
+    allStaticAssets.forEach((assetUrlString) => {
+      const assetUrl = new URL(assetUrlString);
       if (!assetQueue.includes(assetUrl)) {
         assetQueue.push(assetUrl);
       }
     });
 
-  })
+  });
+
+
 }
 
 // Queues for pages to crawl and assets to download
