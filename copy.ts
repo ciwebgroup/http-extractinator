@@ -19,11 +19,24 @@ if (!startUrl) {
   Deno.exit(1);
 }
 
+const allDomains = args._;
+
+allDomains.shift();
+
+// TODO: Validate these are all actual domains if not throw an error
+
+// allDomains.forEach((domain) => {
+//   if (!domain.startsWith("http")) {
+//     throw new Error("All domains must start with http or https");
+//   }
+// });
+
 const domain = new URL(startUrl).hostname;
 const outputDir = `./${domain}`;
 const visitedPages = new Set<string>();
-const downloadedAssets = new Set<string>();
-const aliases = Array.isArray(args.alias) ? args.alias : [args.alias].filter(Boolean); // Support multiple aliases
+const aliases = Array.isArray(args.alias)
+  ? args.alias
+  : [args.alias].filter(Boolean); // Support multiple aliases
 
 await ensureDir(outputDir);
 await ensureDir(path.join(outputDir, "scripts"));
@@ -32,36 +45,38 @@ await ensureDir(path.join(outputDir, "images"));
 
 // Function to categorize assets by type based on extension
 function getAssetType(url: URL): "scripts" | "styles" | "images" | null {
-  const extension = url.pathname.split('.').pop();
+  const extension = url.pathname.split(".").pop();
   if (extension) {
     if (["js"].includes(extension)) return "scripts";
     if (["css"].includes(extension)) return "styles";
-    if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension)) return "images";
+    if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension))
+      return "images";
   }
   return null;
 }
 
-// Check if URL belongs to primary domain or an alias
-function isPrimaryOrAlias(url: URL): boolean {
-  return url.hostname === domain || aliases.includes(url.hostname);
-}
-
 // Download and save an asset based on its type
 async function downloadAsset(assetUrl: URL) {
-  if (!isPrimaryOrAlias(assetUrl)) return; // Skip assets from other domains
 
   const assetType = getAssetType(assetUrl);
   if (!assetType) return;
-  if (downloadedAssets.has(assetUrl.href)) return; // Avoid duplicates
 
-  downloadedAssets.add(assetUrl.href);
-  const response = await fetch(assetUrl.href, { headers: { "User-Agent": args["user-agent"] } });
+  const response = await fetch(assetUrl.href, {
+    headers: { "User-Agent": args["user-agent"] },
+  });
+
+
+
   if (response.ok) {
     const data = new Uint8Array(await response.arrayBuffer());
-    const savePath = path.join(outputDir, assetType, path.basename(assetUrl.pathname));
+    const savePath = path.join(
+      outputDir,
+      assetType,
+      path.basename(assetUrl.pathname)
+    );
     await Deno.writeFile(savePath, data);
     console.log(`\x1b[32mDownloaded\x1b[0m: ${assetUrl.href} to ${savePath}`);
-    
+
     if (assetType === "styles") {
       const cssText = new TextDecoder().decode(data);
       await discoverAssetsInCSS(cssText, assetUrl);
@@ -83,43 +98,69 @@ async function discoverAssetsInCSS(cssText: string, baseUrl: URL) {
 
 // Process a page, discover links and assets, enqueue them as needed
 async function processPage(pageUrl: URL) {
-    // Remove the fragment (if any) from the URL
-    pageUrl.hash = "";
-  
-    if (visitedPages.has(pageUrl.href)) return; // Avoid duplicates
-    visitedPages.add(pageUrl.href);
-  
-    const response = await fetch(pageUrl.href, { headers: { "User-Agent": args["user-agent"] } });
-    if (!response.ok) {
-      console.error(`\x1b[31mFailed to retrieve\x1b[0m: ${pageUrl.href}`);
-      return;
-    }
-  
-    let html = await response.text();
-  
-    // Replace alias domains with relative paths for local assets
-    aliases.forEach((alias) => {
-      html = html.replace(new RegExp(`https?://${alias}`, "g"), `/${domain}`);
-    });
-  
-    // Replace the main domain with relative paths for any links to local assets
-    html = html.replace(new RegExp(`https?://${domain}`, "g"), "");
-  
-    // Determine save path, handling trailing slashes and no file extension
-    let savePath: string;
-    if (pageUrl.pathname.endsWith("/") || !path.extname(pageUrl.pathname)) {
-      savePath = path.join(outputDir, pageUrl.pathname, "index.html");
-    } else {
-      savePath = path.join(outputDir, `${pageUrl.pathname}.html`);
-    }
-    
-    await ensureDir(path.dirname(savePath));
-    await Deno.writeTextFile(savePath, html);
-    console.log(`\x1b[32mSaved page\x1b[0m: ${pageUrl.href} to ${savePath}`);
-  
-    await discoverLinksAndAssets(html, pageUrl);
+  // Remove the fragment (if any) from the URL
+  pageUrl.hash = "";
+
+  if (visitedPages.has(pageUrl.href)) return; // Avoid duplicates
+  visitedPages.add(pageUrl.href);
+
+  const response = await fetch(pageUrl.href, {
+    headers: { "User-Agent": args["user-agent"] },
+  });
+  if (!response.ok) {
+    console.error(`\x1b[31mFailed to retrieve\x1b[0m: ${pageUrl.href}`);
+    return;
+  }
+
+  let html = await response.text();
+
+  // Replace alias domains with relative paths for local assets
+  allDomains.forEach((url) => {  
+    const domain = new URL(url).hostname;
+    // replace the main domain with relative paths for any links to local assets: images, scripts, styles
+   
+    // Replace image paths with relative URI paths
+    html = html.replace(
+      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
+      "/images/$1"
+    );
+
+    // Replace script paths with relative URI paths
+    html = html.replace(
+      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(js))(?=['"\\s>])`, "g"),
+      "/scripts/$1"
+    );
+
+    // Replace style paths with relative URI paths
+    html = html.replace(
+      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(css))(?=['"\\s>])`, "g"),
+      "/styles/$1"
+    );
+
+    // Replace font and other link paths
+    html = html.replace(
+      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+)(?=['"\\s>])`, "g"),
+      "/assets/$1"
+    );
+
+
+    console.log("domain", domain);
+
+  });  
+  // Determine save path, handling trailing slashes and no file extension
+  let savePath: string;
+  if (pageUrl.pathname.endsWith("/") || !path.extname(pageUrl.pathname)) {
+    savePath = path.join(outputDir, pageUrl.pathname, "index.html");
+  } else {
+    savePath = path.join(outputDir, `${pageUrl.pathname}.html`);
+  }
+
+  await ensureDir(path.dirname(savePath));
+  await Deno.writeTextFile(savePath, html);
+  console.log(`\x1b[32mSaved page\x1b[0m: ${pageUrl.href} to ${savePath}`);
+
+  await discoverLinksAndAssets(html, pageUrl);
 }
-  
 
 // Discover links and assets within HTML content
 async function discoverLinksAndAssets(html: string, baseUrl: URL) {
@@ -131,23 +172,29 @@ async function discoverLinksAndAssets(html: string, baseUrl: URL) {
     const href = link.getAttribute("href");
     if (href) {
       const absoluteUrl = new URL(href, baseUrl);
-      if (absoluteUrl.hostname === domain && !visitedPages.has(absoluteUrl.href)) {
+      if (
+        absoluteUrl.hostname === domain &&
+        !visitedPages.has(absoluteUrl.href)
+      ) {
         crawlQueue.push(absoluteUrl);
       }
     }
   });
 
-  // Enqueue assets: scripts, styles, images
-  document.querySelectorAll("script[src], link[rel=stylesheet][href], img[src]").forEach((element) => {
-    const attr = element.hasAttribute("src") ? "src" : "href";
-    const assetPath = element.getAttribute(attr);
-    if (assetPath) {
-      const assetUrl = new URL(assetPath, baseUrl);
-      if (isPrimaryOrAlias(assetUrl)) {
+  allDomains.forEach((domain) => {
+    
+    const currentUrl = new URL(domain).hostname;
+    const allStaticAssetsRegExp = new RegExp(`https?:\\/\\/(?:www\\.)?${currentUrl}\\/[^\"' ]+\\.(css|js|png|jpg|jpeg|gif|webp|svg|bmp|ico|woff2?|ttf|otf|eot)(?=['\"\\s>])`, "gi");        
+    const allStaticAssets = html.match(allStaticAssetsRegExp) ?? [];
+   
+    allStaticAssets.forEach((url) => {
+      const assetUrl = new URL(url);
+      if (!assetQueue.includes(assetUrl)) {
         assetQueue.push(assetUrl);
       }
-    }
-  });
+    });
+
+  })
 }
 
 // Queues for pages to crawl and assets to download
@@ -160,8 +207,11 @@ while (crawlQueue.length > 0) {
   if (pageUrl) await processPage(pageUrl);
 }
 
+console.log(`Downloading ${assetQueue.length} assets...`);
+
 // Process each asset in the asset queue
 while (assetQueue.length > 0) {
   const assetUrl = assetQueue.shift();
   if (assetUrl) await downloadAsset(assetUrl);
 }
+
