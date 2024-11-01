@@ -31,16 +31,22 @@ await ensureDir(outputDir);
 await ensureDir(path.join(outputDir, "scripts"));
 await ensureDir(path.join(outputDir, "styles"));
 await ensureDir(path.join(outputDir, "images"));
+await ensureDir(path.join(outputDir, "fonts"));
+await ensureDir(path.join(outputDir, "icons"));
 
 // Function to categorize assets by type based on extension
-function getAssetType(url: URL): "scripts" | "styles" | "images" | null {
+function getAssetType(url: URL): "scripts" | "styles" | "images" | "fonts" | "icons" | null {
+
   const extension = url.pathname.split(".").pop();
+
   if (extension) {
     if (["js"].includes(extension)) return "scripts";
     if (["css"].includes(extension)) return "styles";
-    if (["avif", "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension))
-      return "images";
+    if (["avif", "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension)) return "images";
+    if (["woff", "woff2", "ttf", "otf", "eot"].includes(extension)) return "fonts";
+    if (["ico"].includes(extension)) return "icons";
   }
+
   return null;
 }
 
@@ -91,11 +97,13 @@ async function processPage(pageUrl: URL) {
   pageUrl.hash = "";
 
   if (visitedPages.has(pageUrl.href)) return; // Avoid duplicates
+
   visitedPages.add(pageUrl.href);
 
   const response = await fetch(pageUrl.href, {
     headers: { "User-Agent": args["user-agent"] },
   });
+
   if (!response.ok) {
     console.error(`\x1b[31mFailed to retrieve\x1b[0m: ${pageUrl.href}`);
     return;
@@ -105,34 +113,47 @@ async function processPage(pageUrl: URL) {
 
   // Replace alias domains with relative paths for local assets
   allDomains.forEach((url) => {  
+
     const domain = new URL(url).hostname;
-    // replace the main domain with relative paths for any links to local assets: images, scripts, styles
    
     // Replace image paths with relative URI paths
     html = html.replace(
       new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
-      "/images/$1"
+      "/assets/images/$1"
     );
 
     // Replace script paths with relative URI paths
     html = html.replace(
       new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(js))(?=['"\\s>])`, "g"),
-      "/scripts/$1"
+      "/assets/scripts/$1"
     );
 
     // Replace style paths with relative URI paths
     html = html.replace(
       new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(css))(?=['"\\s>])`, "g"),
-      "/styles/$1"
+      "/assets/styles/$1"
     );
 
-    // Replace font and other link paths
+    // Replace font paths with relative URI paths
+    html = html.replace(
+      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(woff|woff2|ttf|otf|eot))(?=['"\\s>])`, "g"),
+      "/assets/fonts/$1"
+    );
+
+    // Replace icon paths with relative URI paths
+    html = html.replace(
+      new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+\\.(ico))(?=['"\\s>])`, "g"),
+      "/assets/icons/$1"
+    );
+
+    // Replace ... other link paths
     html = html.replace(
       new RegExp(`https?:\/\/(?:www\.)?${domain}\/([^"']+)(?=['"\\s>])`, "g"),
       "/assets/$1"
     );
 
-  });  
+  });
+
   // Determine save path, handling trailing slashes and no file extension
   let savePath: string;
   if (pageUrl.pathname.endsWith("/") || !path.extname(pageUrl.pathname)) {
