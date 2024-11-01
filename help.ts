@@ -1,7 +1,10 @@
 // help.ts
 console.log(`
     Usage:
-      deno task <command> [options] <URL or Directory>
+      deno task copy [options] <URL> [alias] [alias] [...]
+      deno task serve [options] <Directory>
+      deno task zip [options] <Directory>
+      deno task help
   
     Commands:
       copy    Copies a website from the specified URL
@@ -9,7 +12,7 @@ console.log(`
                 --throttle, -t    Set delay in ms between requests (default: 300)
                 --concurrent, -c  Maximum concurrent connections (default: 5)
                 --user-agent, -u  Specify a custom user-agent
-                --alias, -r       Domains to treat as main URL for assets
+              aliases:            Add URLs to copy from and replace with relative paths
   
       zip     Zips the specified directory
               Usage: deno task zip <directory>

@@ -1,4 +1,5 @@
 // zip.ts
+/*
 import { parse } from "https://deno.land/std@0.181.0/flags/mod.ts";
 import * as path from "https://deno.land/std@0.181.0/path/mod.ts";
 
@@ -23,3 +24,4 @@ async function zipFolder(directory: string) {
 }
 
 await zipFolder(dir);
+*/
