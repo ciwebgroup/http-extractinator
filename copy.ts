@@ -34,6 +34,14 @@ await ensureDir(path.join(outputDir, "assets/images"));
 await ensureDir(path.join(outputDir, "assets/fonts"));
 await ensureDir(path.join(outputDir, "assets/icons"));
 
+// Sanitize filename function with double URL decoding
+function sanitizeFilename(filename: string): string {
+  // Decode double-encoded spaces and any other double-encoded characters
+  return decodeURIComponent(filename)
+    .toLowerCase()
+    .replace(/%20|[\s]+/g, "-"); // Replace spaces with dashes
+}
+
 // Function to categorize assets by type based on extension
 function getAssetType(url: URL): "scripts" | "styles" | "images" | "fonts" | "icons" | null {
 
@@ -69,7 +77,7 @@ async function downloadAsset(assetUrl: URL) {
       outputDir,
       'assets',
       assetType,
-      path.basename(assetUrl.pathname)
+      sanitizeFilename( path.basename(assetUrl.pathname) )
     );
 
     await Deno.writeFile(savePath, data);
@@ -124,20 +132,41 @@ async function processPage(pageUrl: URL) {
    
     // Replace image paths with relative URI paths
     html = html.replace(
-      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
-      "/assets/images/$1"
+      new RegExp(`src=["'](https?:\\/\\/(?:www\\.)?${domain}\\/[^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))["']`, "gi"),
+      (_, url) => `src="/assets/images/${sanitizeFilename(path.basename(url))}"`
     ).replace(
-      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(js))(?=['"\\s>])`, "g"),
-      "/assets/scripts/$1"
+      new RegExp(`srcset=["']((https?:\\/\\/(?:www\\.)?${domain}\\/[^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp)(?:\\s\\d+w)?,?\\s*)+)["']`, "gi"),
+      (_, srcset) => {
+        const updatedSrcset = srcset
+          .split(",") // Split by comma to get individual URLs with resolutions
+          .map((entry: string) => {
+            const [url, size] = entry.trim().split(/\s+/); // Separate the URL and size (e.g., "500w")
+            const filename = sanitizeFilename(path.basename(url));
+            return `/assets/images/${filename} ${size || ""}`.trim(); // Reconstruct the entry with the sanitized URL
+          })
+          .join(", "); // Rejoin with commas
+        return `srcset="${updatedSrcset}"`;
+      }
+    ).replace(
+      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>])`, "g"),
+      (_, filename) => `/assets/images/${sanitizeFilename(filename)}`
+      // "/assets/images/$1"
+    ).replace(
+      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"']+\\.(js))(?=['"\\s>])`, "g"),
+      // "/assets/scripts/$1"
+      (_, filename) => `/assets/scripts/${sanitizeFilename(filename)}`
     ).replace(
       new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"']+\\.(css))(?=['"\\s>])`, "g"),
-      "/assets/styles/$1"
+      // "/assets/styles/$1"
+      (_, filename) => `/assets/styles/${sanitizeFilename(filename)}`
     ).replace(
       new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(woff|woff2|ttf|otf|eot))(?=['"\\s>])`, "g"),
-      "/assets/fonts/$1"
+      // "/assets/fonts/$1"
+      (_, filename) => `/assets/fonts/${sanitizeFilename(filename)}`
     ).replace(
       new RegExp(`https?:\/\/(?:www\\.)?${domain}\/[^\/]+\/([^"']+\\.(ico))(?=['"\\s>])`, "g"),
-      "/assets/icons/$1"
+      // "/assets/icons/$1"
+      (_, filename) => `/assets/icons/${sanitizeFilename(filename)}`
     ).replace(/\r\n|\r/g, "\n");
 
   });
