@@ -5,6 +5,7 @@
     "serve": "deno run --allow-read --allow-net main.ts serve",
     "templatify": "deno run --allow-read --allow-write templatify.ts",
     "test:regex": "deno run --allow-read --allow-write test/regex-test.ts",
+    "test:validate": "deno run --allow-net --allow-read --allow-write test/validate-html.ts",
     "help": "deno run main.ts help"
   },
   "permissions": {
