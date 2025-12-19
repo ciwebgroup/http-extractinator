@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset URL Rewriting Test Cases</title>
+    
+    <!-- Test Case 1: Script src attributes -->
+    <script src="/assets/scripts/d-js-jquery-migrate.min.js"></script>
+    <script src="/assets/scripts/test-file.js?v=1.2.3"></script>
+    <script src="/assets/scripts/local-script.js?hash=abc123&ver=2.0"></script>
+    
+    <!-- Test Case 2: Link href for stylesheets -->
+    <link rel="stylesheet" href="/assets/styles/styles.css?family=Roboto:wght@400;700">
+    <link rel="preload" href="/assets/images/home-screen-icon.png"/>
+    
+    <!-- Test Case 4: Inline CSS with url() -->
+    <style>
+        @charset "UTF-8";
+        @font-face {
+            font-family: FontAwesome;
+            font-display: block;
+            src: url(/assets/fonts/fontawesome-webfont.eot?v=6);
+            src: url(/assets/fonts/fontawesome-webfont.eot?#iefix&v=6) format("embedded-opentype"),
+                url(/assets/fonts/fontawesome-webfont.woff?v=6) format("woff"),
+                url(/assets/fonts/fontawesome-webfont.ttf?v=6) format("truetype"),
+                url(/assets/images/background.png?hash=xyz");
+        }
+        .background-single-quotes {
+            background: url('/assets/images/image-desktop.jpg" alt="Picture Test">
+    </picture>
+    
+    <!-- Test Case 9: Link href for various resources -->
+    <a href="https://www.designroofservicesllc.com/about/">About Us</a>
+    <link rel="icon" href="/assets/images/data-bg-image.jpg?cache=false"></div>
+    <div data-src="/assets/images/gallery+3-640w.jpg"></div>
+    
+    <!-- Test Case 12: JavaScript variables (inline) -->
+    <script>
+        var rtCommonProps = {};
+        rtCommonProps["common.resources.cdn.host"] = 'https://static.cdn-website.com';
+        rtCommonProps["common.resources.folder"] = '/assets/images/Design-roof-services-1.jpg";
+        
+        const imageUrls = [
+            "https://irp.cdn-website.com/8f128abb/dms3rep/multi/Metal-Roofing-9.JPG",
+            "/assets/images/gallery+4-640w.jpg?ts=1234567890"
+        ];
+        
+        // Minified-style
+        var a="/assets/images/test.png#hash";
+    </script>
+    
+    <!-- Test Case 13: JSON-LD structured data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "image": [
+            "/assets/images/metal-roofing-16.jpg",
+            "https://irp.cdn-website.com/8f128abb/dms3rep/multi/Metal-Roofing-9.JPG",
+            "https://lirp.cdn-website.com/8f128abb/dms3rep/multi/opt/Metal-Roofing-6-1920w.JPG"
+        ],
+        "logo": "/assets/images/svg-image.png" />
+        <image xlink:href="/assets/images/svg-xlink-image.jpg?v=1" />
+    </svg>
+    
+    <!-- Test Case 15: Object and embed tags -->
+    <object data="https://static.cdn-website.com/pdf/document.pdf?version=2.0"></object>
+    <embed src="https://irp.cdn-website.com/media/video.mp4#t=10,20">
+    
+    <!-- Test Case 16: Video and audio sources -->
+    <video poster="/assets/images/video-poster.jpg">
+        <source src="https://static.cdn-website.com/videos/promo.mp4?quality=hd" type="video/mp4">
+        <source src="https://irp.cdn-website.com/videos/promo.webm" type="video/webm">
+    </video>
+    
+    <audio>
+        <source src="https://static.cdn-website.com/audio/background.mp3?v=1.0">
+        <source src="https://irp.cdn-website.com/audio/background.ogg">
+    </audio>
+    
+    <!-- Test Case 17: Form action attributes -->
+    <form action="https://www.designroofservicesllc.com/submit?redirect=https://static.cdn-website.com/success.html">
+        <input type="image" src="/assets/images/map.png"></iframe>
+    
+    <!-- Test Case 19: Comments that might contain URLs (should NOT be rewritten) -->
+    <!-- This is a comment with /assets/images/minified-img.png"alt="Test"/></div>
+</body>
+</html>
+

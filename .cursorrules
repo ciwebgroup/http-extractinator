@@ -1,0 +1,33 @@
+# HTTP Extractinator Project Rules
+
+## Asset Verification
+- Before assuming an asset wasn't downloaded, always verify its existence using `find` command
+- Assets are saved with flattened paths: `/assets/{type}/{filename}` regardless of original URL structure
+- Check the actual filesystem before making assumptions about missing files
+
+## URL Rewriting Debugging
+When investigating URL rewriting issues:
+1. First verify the asset exists in `/assets/{scripts|styles|images|fonts|icons}/`
+2. Check if the URL pattern is in the regex (look for the domain in allDomains)
+3. Examine the actual HTML to see what the rewritten URL looks like
+4. Look for patterns: double slashes, partial domain paths, query params, fragments
+
+## Testing Workflow
+1. Run `deno task test:regex` to test URL rewriting patterns against test cases
+2. Use `--max-pages=N` flag with copy command to limit pages for faster testing
+3. Add failed patterns to `test/testme.html` for regression testing
+4. Update regex patterns in `copy.ts` based on test results
+
+## Common URL Rewriting Issues
+- **Double slashes**: `/assets/scripts//domain.com/path` - regex didn't strip domain
+- **Nested paths preserved**: `/assets/images/dms3rep/multi/opt/file.jpg` - regex only matches shallow paths
+- **Query params**: URLs with `?v=1.0` or `#anchor` need special handling
+- **Minified code**: No spaces between attributes, need careful regex boundaries
+- **JavaScript variables**: String literals in JS need different pattern than HTML attributes
+
+## Code Quality
+- Always use proper TypeScript types
+- Add descriptive comments for complex regex patterns
+- Log progress with color-coded console output
+- Handle errors gracefully with try-catch blocks
+
