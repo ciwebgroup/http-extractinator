@@ -2,6 +2,7 @@ import { parse } from "https://deno.land/std@0.181.0/flags/mod.ts";
 import { ensureDir } from "https://deno.land/std@0.181.0/fs/mod.ts";
 import * as path from "https://deno.land/std@0.181.0/path/mod.ts";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.48/deno-dom-wasm.ts";
+import { rewriteHTMLSimple } from "./lib/url-rewriter.ts";
 
 // Types for state management
 interface SummaryState {
@@ -26,10 +27,12 @@ interface SummaryState {
   stats: {
     pagesProcessed: number;
     assetsDownloaded: number;
+    assetsSkipped: number;
     totalFailures: number;
     startTime: string;
     lastSaveTime: string;
   };
+  skippedDomains: string[];
 }
 
 // Parse arguments
@@ -38,6 +41,7 @@ const args = parse(Deno.args, {
     throttle: 300,
     concurrent: 5,
     "max-pages": 0, // 0 = unlimited
+    "skip-domains": "", // Comma-separated list of domains to skip
     "user-agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
   },
@@ -51,6 +55,13 @@ if (!startUrl) {
 
 const allDomains: string[] = args._ as string[];
 allDomains.shift();
+
+// Parse skip domains
+const skipDomains = new Set<string>();
+if (args["skip-domains"]) {
+  const skipList = (args["skip-domains"] as string).split(",").map((d) => d.trim().toLowerCase());
+  skipList.forEach((d) => skipDomains.add(d));
+}
 
 const domain = new URL(startUrl).hostname;
 const outputDir = `./sites/${domain}`;
@@ -134,11 +145,27 @@ async function initializeSummary() {
     stats: {
       pagesProcessed: 0,
       assetsDownloaded: 0,
+      assetsSkipped: 0,
       totalFailures: 0,
       startTime: new Date().toISOString(),
       lastSaveTime: new Date().toISOString(),
     },
+    skippedDomains: Array.from(skipDomains),
   };
+}
+
+// Check if a URL's domain should be skipped
+function shouldSkipDomain(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+  
+  // Check exact match or subdomain match
+  for (const skipDomain of skipDomains) {
+    if (hostname === skipDomain || hostname.endsWith(`.${skipDomain}`)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 // Log failed download
@@ -182,6 +209,13 @@ function getAssetType(url: URL): "scripts" | "styles" | "images" | "fonts" | "ic
 
 // Download and save an asset based on its type
 async function downloadAsset(assetUrl: URL) {
+  // Skip if domain is in the skip list
+  if (shouldSkipDomain(assetUrl)) {
+    summaryState.stats.assetsSkipped++;
+    console.log(`\x1b[90m⊘ Skipped (domain)\x1b[0m: ${assetUrl.href}`);
+    return;
+  }
+
   // Skip if already downloaded
   if (downloadedAssets.has(assetUrl.href)) {
     return;
@@ -277,51 +311,13 @@ async function processPage(pageUrl: URL) {
 
     await discoverLinksAndAssets(html, pageUrl);
 
-  // Replace alias domains with relative paths for local assets
-  allDomains.forEach((url) => {  
-
-    const domain = new URL(url).hostname;
-   
-    // Replace image paths with relative URI paths
-    html = html.replace(
-      new RegExp(`src=["'](https?:\\/\\/(?:www\\.)?${domain}\\/[^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))["']`, "gi"),
-      (_, url) => `src="/assets/images/${sanitizeFilename(path.basename(url))}"`
-    ).replace(
-      new RegExp(`srcset=["']((https?:\\/\\/(?:www\\.)?${domain}\\/[^"']+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp)(?:\\s\\d+w)?,?\\s*)+)["']`, "gi"),
-      (_, srcset) => {
-        const updatedSrcset = srcset
-          .split(",") // Split by comma to get individual URLs with resolutions
-          .map((entry: string) => {
-            const [url, size] = entry.trim().split(/\s+/); // Separate the URL and size (e.g., "500w")
-            const filename = sanitizeFilename(path.basename(url));
-            return `/assets/images/${filename} ${size || ""}`.trim(); // Reconstruct the entry with the sanitized URL
-          })
-          .join(", "); // Rejoin with commas
-        return `srcset="${updatedSrcset}"`;
-      }
-    ).replace(
-      // Images - stops at query params, fragments, spaces, quotes, closing tags, parentheses, and slashes
-      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"'?#\\s>)/]+\\.(avif|jpg|jpeg|png|gif|webp|svg|bmp))(?=['"\\s>)?#])`, "g"),
-      (_, filename) => `/assets/images/${sanitizeFilename(filename)}`
-    ).replace(
-      // JavaScript files
-      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"'?#\\s>)/]+\\.(js))(?=['"\\s>)?#])`, "g"),
-      (_, filename) => `/assets/scripts/${sanitizeFilename(filename)}`
-    ).replace(
-      // CSS files
-      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"'?#\\s>)/]+\\.(css))(?=['"\\s>)?#])`, "g"),
-      (_, filename) => `/assets/styles/${sanitizeFilename(filename)}`
-    ).replace(
-      // Font files
-      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"'?#\\s>)/]+\\.(woff|woff2|ttf|otf|eot))(?=['"\\s>)?#])`, "g"),
-      (_, filename) => `/assets/fonts/${sanitizeFilename(filename)}`
-    ).replace(
-      // Icon files
-      new RegExp(`https?:\/\/(?:www\\.)?${domain}\/(?:[^\/]+\/)*([^"'?#\\s>)/]+\\.(ico))(?=['"\\s>)?#])`, "g"),
-      (_, filename) => `/assets/icons/${sanitizeFilename(filename)}`
-    ).replace(/\r\n|\r/g, "\n");
-
-  });
+  // Use url-rewriter module for comprehensive pattern-based URL rewriting
+  // This handles all asset types: scripts, styles, images, fonts, icons, media
+  // with 21 context-specific patterns that prevent cross-tag matching
+  html = rewriteHTMLSimple(html, allDomains);
+  
+  // Normalize line endings
+  html = html.replace(/\r\n|\r/g, "\n");
 
     // Determine save path, handling trailing slashes and no file extension
     let savePath: string;
@@ -380,9 +376,20 @@ function discoverLinksAndAssets(html: string, baseUrl: URL) {
     // console.log('allStaticAssets', allStaticAssets);
    
     allStaticAssets.forEach((assetUrlString) => {
-      const assetUrl = new URL(assetUrlString);
-      if (!assetQueue.includes(assetUrl)) {
-        assetQueue.push(assetUrl);
+      try {
+        const assetUrl = new URL(assetUrlString);
+        
+        // Skip if domain is in the skip list
+        if (shouldSkipDomain(assetUrl)) {
+          return;
+        }
+        
+        if (!assetQueue.some((u) => u.href === assetUrl.href)) {
+          assetQueue.push(assetUrl);
+        }
+      } catch (error) {
+        // Invalid URL, skip it
+        console.warn(`\x1b[33m⚠ Invalid URL\x1b[0m: ${assetUrlString}`);
       }
     });
 
@@ -410,6 +417,9 @@ if (resumed) {
 console.log(`\x1b[36m🚀 Starting extraction\x1b[0m`);
 console.log(`   URL: ${startUrl}`);
 console.log(`   Additional domains: ${allDomains.length}`);
+if (skipDomains.size > 0) {
+  console.log(`   Skip domains: ${Array.from(skipDomains).join(", ")}`);
+}
 console.log(`   Throttle: ${args.throttle}ms`);
 console.log(`   Concurrent: ${args.concurrent}`);
 console.log(`   Max pages: ${args["max-pages"] === 0 ? "unlimited" : args["max-pages"]}\n`);
@@ -465,6 +475,9 @@ console.log(`\x1b[32m✅ Extraction Complete!\x1b[0m`);
 console.log(`\x1b[36m═══════════════════════════════════════════\x1b[0m`);
 console.log(`   Pages processed: ${summaryState.stats.pagesProcessed}`);
 console.log(`   Assets downloaded: ${summaryState.stats.assetsDownloaded}`);
+if (summaryState.stats.assetsSkipped > 0) {
+  console.log(`   Assets skipped: ${summaryState.stats.assetsSkipped}`);
+}
 console.log(`   Total failures: ${summaryState.stats.totalFailures}`);
 console.log(`   Output directory: ${outputDir}`);
 
